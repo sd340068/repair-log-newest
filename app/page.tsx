@@ -302,16 +302,29 @@ export default function Home() {
         </div>
 
         {/* Key Items Tiles */}
-        <div className="flex flex-wrap gap-4 justify-center w-full">
-          {totals.map(t=>(
-            <div key={t.item} className="bg-gray-50 p-4 rounded-lg shadow flex flex-col items-center justify-center min-w-[120px]">
-              <span className="font-semibold text-blue-900 text-2xl">{t.totalCount}</span>
-              <span className="font-medium text-gray-700 text-base mt-1">{t.item}</span>
-              <span className="text-gray-500 text-sm mt-1">£{t.totalAmount.toFixed(2)}</span>
-            </div>
-          ))}
-        </div>
+{/* Key Items Tiles */}
+<div className="flex flex-wrap gap-4 justify-center w-full">
+  {totals.map(t=>{
+    // Assign color based on item
+    let borderColor = 'border-gray-300'
+    switch(t.item.toLowerCase()){
+      case 'playstation': borderColor='border-blue-500'; break
+      case 'xbox': borderColor='border-green-500'; break
+      case 'nintendo': borderColor='border-red-500'; break
+      case 'ipad': borderColor='border-black'; break
+      case 'laptop': borderColor='border-yellow-400'; break
+    }
+
+    return (
+      <div key={t.item} className={`flex flex-col items-center justify-center min-w-[120px] bg-gray-50 p-4 rounded-lg shadow border-l-4 ${borderColor}`}>
+        <span className="font-semibold text-blue-900 text-2xl">{t.totalCount}</span>
+        <span className="font-medium text-gray-700 text-base mt-1">{t.item}</span>
+        <span className="text-gray-500 text-sm mt-1">£{t.totalAmount.toFixed(2)}</span>
       </div>
+    )
+  })}
+</div>
+
 
       {/* Repairs Table */}
       <div className="overflow-x-auto rounded-lg border border-gray-200 shadow">
