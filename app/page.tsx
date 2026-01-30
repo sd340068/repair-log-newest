@@ -257,14 +257,19 @@ export default function Home() {
 
       {/* Manual Entry */}
       <form onSubmit={handleManualSubmit} className="p-4 bg-white border border-gray-200 rounded-xl shadow hover:shadow-lg transition max-w-3xl mx-auto flex flex-wrap gap-3">
-        {['listing_id','item_name','price','quantity','date_sold'].map(f=>(<input key={f}
-          type={f==='price'||f==='quantity'?'number':f==='date_sold'?'date':'text'}
-          placeholder={f==='listing_id'?'Order #':f.replace('_',' ').replace(/\b\w/g,c=>c.toUpperCase())}
-          value={(manual as any)[f]} onChange={e=>setManual({...manual,[f]:e.target.value})} required
-          className="flex-1 min-w-[110px] p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900 text-gray-900 placeholder-gray-400 ${
-                 f==='date_sold' ? 'min-w-[160px]' : 'min-w-[110px]'
-                                                                             }`}
-        />))}
+        {['listing_id','item_name','price','quantity','date_sold'].map(f => (
+          <input
+            key={f}
+            type={f==='price'||f==='quantity'?'number':f==='date_sold'?'date':'text'}
+            placeholder={f==='listing_id'?'Order #':f.replace('_',' ').replace(/\b\w/g,c=>c.toUpperCase())}
+            value={(manual as any)[f]}
+            onChange={e=>setManual({...manual,[f]:e.target.value})}
+            required
+            className={`flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900 text-gray-900 placeholder-gray-400 ${
+              f==='date_sold' ? 'min-w-[160px]' : 'min-w-[110px]'
+            }`}
+          />
+        ))}
         <button type="submit" className="px-4 py-2 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-800 transition">Add</button>
       </form>
 
