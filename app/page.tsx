@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useRouter } from 'next/navigation'
 
 type Repair = {
   id: number
@@ -14,6 +15,25 @@ type Repair = {
 }
 
 export default function Home() {
+  const router = useRouter()
+  const [checkingAuth, setCheckingAuth] = useState(true)
+
+  // --- AUTH CHECK ---
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        router.push('/login') // redirect if not logged in
+      } else {
+        setCheckingAuth(false)
+      }
+    }
+    checkAuth()
+  }, [router])
+
+  if (checkingAuth) return <p className="text-center mt-10 text-gray-500">Checking authentication…</p>
+
+  // --- STATES ---
   const [repairs, setRepairs] = useState<Repair[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -29,6 +49,7 @@ export default function Home() {
     date_sold: '',
   })
 
+  // --- FETCH REPAIRS ---
   const fetchRepairs = async () => {
     const { data, error } = await supabase
       .from('repairs')
@@ -42,6 +63,7 @@ export default function Home() {
     fetchRepairs()
   }, [])
 
+  // --- HELPERS ---
   const parseDateDMY = (str: string) => {
     if (!str || !/\d{1,2}\/\d{1,2}\/\d{4}/.test(str)) return null
     const [day, month, year] = str.split('/')
@@ -49,12 +71,58 @@ export default function Home() {
     return isNaN(d.getTime()) ? null : d
   }
 
+  const filterRepairsByPeriod = (repairs: Repair[]) => {
+    const now = new Date()
+    return repairs.filter((r) => {
+      const sold = new Date(r.date_sold)
+      const soldYear = sold.getUTCFullYear()
+      const soldMonth = sold.getUTCMonth()
+
+      if (filterPeriod === 'thisMonth') return soldYear === now.getUTCFullYear() && soldMonth === now.getUTCMonth()
+      if (filterPeriod === 'lastMonth') {
+        const lastMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1))
+        return soldYear === lastMonth.getUTCFullYear() && soldMonth === lastMonth.getUTCMonth()
+      }
+      if (filterPeriod === 'thisYear') return soldYear === now.getUTCFullYear()
+      if (filterPeriod === 'lastYear') return soldYear === now.getUTCFullYear() - 1
+      if (filterPeriod === 'custom' && customStart && customEnd) {
+        const start = new Date(customStart)
+        const end = new Date(customEnd)
+        end.setHours(23, 59, 59, 999)
+        return sold >= start && sold <= end
+      }
+      return true
+    })
+  }
+
+  const getUniqueRepairs = (repairs: Repair[]) => {
+    const map = new Map<string, Repair>()
+    for (const r of repairs) {
+      const key = r.listing_id || crypto.randomUUID()
+      if (!map.has(key)) map.set(key, r)
+    }
+    return Array.from(map.values())
+  }
+
+  const filteredRepairs = getUniqueRepairs(filterRepairsByPeriod(repairs))
+  const keyItems = ['Nintendo', 'Playstation', 'Xbox', 'iPad']
+
+  const totals = keyItems.map((item) => {
+    const filtered = filteredRepairs.filter(r => r.item_name.toLowerCase().includes(item.toLowerCase()))
+    const totalAmount = filtered.reduce((sum, r) => sum + r.price, 0) // price only
+    const totalCount = filtered.reduce((sum, r) => sum + r.quantity, 0)
+    return { item, totalAmount, totalCount }
+  })
+
+  const allItemsTotalCount = filteredRepairs.reduce((sum, r) => sum + r.quantity, 0)
+  const allItemsTotalPrice = filteredRepairs.reduce((sum, r) => sum + r.price, 0)
+
+  // --- HANDLERS ---
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setSelectedFile(file)
     setLoading(true)
-
     try {
       const Papa = (await import('papaparse')).default
       const arrayBuffer = await file.arrayBuffer()
@@ -162,61 +230,11 @@ export default function Home() {
   }
 
   const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      console.error('Logout error:', error.message)
-      alert('Failed to logout')
-    } else {
-      window.location.href = '/login'
-    }
+    await supabase.auth.signOut()
+    router.push('/login')
   }
 
-  const filterRepairsByPeriod = (repairs: Repair[]) => {
-    const now = new Date()
-    return repairs.filter((r) => {
-      const sold = new Date(r.date_sold)
-      const soldYear = sold.getUTCFullYear()
-      const soldMonth = sold.getUTCMonth()
-
-      if (filterPeriod === 'thisMonth') return soldYear === now.getUTCFullYear() && soldMonth === now.getUTCMonth()
-      if (filterPeriod === 'lastMonth') {
-        const lastMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1))
-        return soldYear === lastMonth.getUTCFullYear() && soldMonth === lastMonth.getUTCMonth()
-      }
-      if (filterPeriod === 'thisYear') return soldYear === now.getUTCFullYear()
-      if (filterPeriod === 'lastYear') return soldYear === now.getUTCFullYear() - 1
-      if (filterPeriod === 'custom' && customStart && customEnd) {
-        const start = new Date(customStart)
-        const end = new Date(customEnd)
-        end.setHours(23, 59, 59, 999)
-        return sold >= start && sold <= end
-      }
-      return true
-    })
-  }
-
-  const getUniqueRepairs = (repairs: Repair[]) => {
-    const map = new Map<string, Repair>()
-    for (const r of repairs) {
-      const key = r.listing_id || crypto.randomUUID()
-      if (!map.has(key)) map.set(key, r)
-    }
-    return Array.from(map.values())
-  }
-
-  const filteredRepairs = getUniqueRepairs(filterRepairsByPeriod(repairs))
-  const keyItems = ['Nintendo', 'Playstation', 'Xbox', 'iPad']
-
-  const totals = keyItems.map((item) => {
-    const filtered = filteredRepairs.filter(r => r.item_name.toLowerCase().includes(item.toLowerCase()))
-    const totalAmount = filtered.reduce((sum, r) => sum + r.price, 0) // price only
-    const totalCount = filtered.reduce((sum, r) => sum + r.quantity, 0)
-    return { item, totalAmount, totalCount }
-  })
-
-  const allItemsTotalCount = filteredRepairs.reduce((sum, r) => sum + r.quantity, 0)
-  const allItemsTotalPrice = filteredRepairs.reduce((sum, r) => sum + r.price, 0)
-
+  // --- RENDER ---
   return (
     <main className="min-h-screen bg-gray-50 font-sans p-6 space-y-8">
       {/* Header */}
