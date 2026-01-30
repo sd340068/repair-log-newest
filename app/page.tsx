@@ -16,28 +16,28 @@ type Repair = {
 
 export default function Home() {
   const router = useRouter()
-const [checkingAuth, setCheckingAuth] = useState(true)
+  const [checkingAuth, setCheckingAuth] = useState(true)
 
-useEffect(() => {
-  const checkAuth = async () => {
-    try {
-      const { data, error } = await supabase.auth.getSession()
-      const session = data?.session ?? null
-      if (!session) {
+  // --- AUTH CHECK ---
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession()
+        const session = data?.session ?? null
+        if (!session) {
+          router.push('/login')
+        } else {
+          setCheckingAuth(false)
+        }
+      } catch (err) {
+        console.error('Auth check failed:', err)
         router.push('/login')
-      } else {
-        setCheckingAuth(false)
       }
-    } catch (err) {
-      console.error('Auth check failed:', err)
-      router.push('/login')
     }
-  }
-  checkAuth()
-}, [router])
+    checkAuth()
+  }, [router])
 
-if (checkingAuth) return <p className="text-center mt-10 text-gray-500">Checking authentication…</p>
-
+  if (checkingAuth) return <p className="text-center mt-10 text-gray-500">Checking authentication…</p>
 
   // --- STATES ---
   const [repairs, setRepairs] = useState<Repair[]>([])
@@ -104,7 +104,7 @@ if (checkingAuth) return <p className="text-center mt-10 text-gray-500">Checking
   const getUniqueRepairs = (repairs: Repair[]) => {
     const map = new Map<string, Repair>()
     for (const r of repairs) {
-      const key = r.listing_id || crypto.randomUUID()
+      const key = r.listing_id || Math.random().toString(36).substring(2, 10)
       if (!map.has(key)) map.set(key, r)
     }
     return Array.from(map.values())
@@ -115,7 +115,7 @@ if (checkingAuth) return <p className="text-center mt-10 text-gray-500">Checking
 
   const totals = keyItems.map((item) => {
     const filtered = filteredRepairs.filter(r => r.item_name.toLowerCase().includes(item.toLowerCase()))
-    const totalAmount = filtered.reduce((sum, r) => sum + r.price, 0) // price only
+    const totalAmount = filtered.reduce((sum, r) => sum + r.price, 0)
     const totalCount = filtered.reduce((sum, r) => sum + r.quantity, 0)
     return { item, totalAmount, totalCount }
   })
