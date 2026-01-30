@@ -49,61 +49,25 @@ export default function Home() {
     try {
       const Papa = (await import('papaparse')).default
 
-      const parseCSV = (file: File) =>
-        new Promise<any[]>((resolve, reject) => {
-          Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            worker: false,
-            encoding: 'UTF-8', // try UTF-8 first
-            beforeFirstChunk: (chunk) => {
-              // remove title row
-              const lines = chunk.split(/\r?\n/)
-              lines.shift()
-              return lines.join('\n')
-            },
-            complete: (results) => resolve(results.data),
-            error: (err) => reject(err),
-          })
-        })
+      // read CSV as text
+      const text = await file.text()
+      const lines = text.split(/\r?\n/)
 
-      let data: any[] = await parseCSV(file)
+      // skip first row if it is a title row
+      const csvText = lines.slice(1).join('\n')
 
-      // If all rows are empty, try UTF-16
-      const allEmpty = data.every((row) =>
-        Object.values(row).every((v) => v === '' || v === null)
-      )
-
-      if (allEmpty) {
-        console.warn('CSV seems empty, retrying with UTF-16')
-        const parseCSV_UTF16 = (file: File) =>
-          new Promise<any[]>((resolve, reject) => {
-            Papa.parse(file, {
-              header: true,
-              skipEmptyLines: true,
-              worker: false,
-              encoding: 'UTF-16',
-              beforeFirstChunk: (chunk) => {
-                const lines = chunk.split(/\r?\n/)
-                lines.shift()
-                return lines.join('\n')
-              },
-              complete: (results) => resolve(results.data),
-              error: (err) => reject(err),
-            })
-          })
-
-        data = await parseCSV_UTF16(file)
-      }
+      const { data } = Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: true,
+      })
 
       console.log('Parsed CSV:', data)
 
-      // Map CSV to Supabase
-      const rows = data.map((row: any) => ({
-        listing_id: row['Order number'] || '',
-        item_name: row['Item title'] || '',
-        price: Number(String(row['Total price'] || '0').replace(/[^0-9.-]+/g, '')),
+      const rows = (data as any[]).map((row: any) => ({
+        listing_id: row['Order number']?.trim() || '',
+        item_name: row['Item title']?.trim() || '',
         quantity: Number(row['Quantity'] || 1),
+        price: Number(String(row['Total price'] || '0').replace(/[^0-9.-]+/g, '')),
         date_sold: new Date(row['Sale date'] || Date.now()).toISOString(),
         source: 'csv',
       }))
