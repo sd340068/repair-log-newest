@@ -301,11 +301,9 @@ export default function Home() {
           <span className="text-gray-500 text-base mt-1">£{allTotalAmount.toFixed(2)}</span>
         </div>
 
-        {/* Key Items Tiles */}
 {/* Key Items Tiles */}
 <div className="flex flex-wrap gap-4 justify-center w-full">
-  {totals.map(t=>{
-    // Assign color based on item
+  {totals.map(t => {
     let borderColor = 'border-gray-300'
     switch(t.item.toLowerCase()){
       case 'playstation': borderColor='border-blue-500'; break
@@ -324,6 +322,7 @@ export default function Home() {
     )
   })}
 </div>
+
 
 
       {/* Repairs Table */}
