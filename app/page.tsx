@@ -281,7 +281,7 @@ export default function Home() {
       {/* Totals */}
       <div className="bg-white p-6 rounded shadow space-y-4">
         <div className="text-center">
-          <div className="text-3xl font-bold">{allTotalCount}</div>
+          <div className="text-4xl font-bold">{allTotalCount}</div>
           <div className="text-gray-500">All Items (£{allTotalAmount.toFixed(2)})</div>
         </div>
 
