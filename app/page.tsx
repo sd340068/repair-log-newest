@@ -54,7 +54,7 @@ export default function Home() {
         Papa.parse(file, {
           header: true,
           skipEmptyLines: true,
-          worker: false, // safe for debugging first
+          worker: false, // safer for debugging
           beforeFirstChunk: (chunk) => {
             // Remove first row (title row)
             const lines = chunk.split(/\r?\n/)
@@ -68,17 +68,13 @@ export default function Home() {
 
       console.log('Parsed CSV:', data)
 
+      // Map CSV to Supabase fields
       const rows = data.map((row: any) => ({
-        listing_id:
-          row['Order number'] || row['Order #'] || row['order number'] || '',
-        item_name:
-          row['Item title'] || row['Item Name'] || row['item title'] || '',
-        price: Number(
-          String(row['Total price'] || row['Price'] || '0').replace(/[^0-9.-]+/g, '')
-        ),
-        quantity: Number(row['Quantity'] || row['Qty'] || 1),
-        date_sold:
-          new Date(row['Sale date'] || row['Date Sold'] || Date.now()).toISOString(),
+        listing_id: row['Order number'] || '',
+        item_name: row['Item title'] || '',
+        price: Number(String(row['Total price'] || '0').replace(/[^0-9.-]+/g, '')),
+        quantity: Number(row['Quantity'] || 1),
+        date_sold: new Date(row['Sale date'] || Date.now()).toISOString(),
         source: 'csv',
       }))
 
