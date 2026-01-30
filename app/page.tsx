@@ -232,7 +232,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-50 font-sans p-6 space-y-8">
-
       {/* Header */}
       <div className="flex justify-center items-center mb-6 relative">
         <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 text-center">
@@ -301,29 +300,28 @@ export default function Home() {
           <span className="text-gray-500 text-base mt-1">£{allTotalAmount.toFixed(2)}</span>
         </div>
 
-{/* Key Items Tiles */}
-<div className="flex flex-wrap gap-4 justify-center w-full">
-  {totals.map(t => {
-    let borderColor = 'border-gray-300'
-    switch(t.item.toLowerCase()){
-      case 'playstation': borderColor='border-blue-500'; break
-      case 'xbox': borderColor='border-green-500'; break
-      case 'nintendo': borderColor='border-red-500'; break
-      case 'ipad': borderColor='border-black'; break
-      case 'laptop': borderColor='border-yellow-400'; break
-    }
+        {/* Key Items Tiles with colored left accent */}
+        <div className="flex flex-wrap gap-4 justify-center w-full">
+          {totals.map(t=>{
+            let borderColor = 'border-gray-300'
+            switch(t.item.toLowerCase()){
+              case 'playstation': borderColor='border-blue-500'; break
+              case 'xbox': borderColor='border-green-500'; break
+              case 'nintendo': borderColor='border-red-500'; break
+              case 'ipad': borderColor='border-black'; break
+              case 'laptop': borderColor='border-yellow-400'; break
+            }
 
-    return (
-      <div key={t.item} className={`flex flex-col items-center justify-center min-w-[120px] bg-gray-50 p-4 rounded-lg shadow border-l-4 ${borderColor}`}>
-        <span className="font-semibold text-blue-900 text-2xl">{t.totalCount}</span>
-        <span className="font-medium text-gray-700 text-base mt-1">{t.item}</span>
-        <span className="text-gray-500 text-sm mt-1">£{t.totalAmount.toFixed(2)}</span>
+            return (
+              <div key={t.item} className={`flex flex-col items-center justify-center min-w-[120px] bg-gray-50 p-4 rounded-lg shadow border-l-4 ${borderColor}`}>
+                <span className="font-semibold text-blue-900 text-2xl">{t.totalCount}</span>
+                <span className="font-medium text-gray-700 text-base mt-1">{t.item}</span>
+                <span className="text-gray-500 text-sm mt-1">£{t.totalAmount.toFixed(2)}</span>
+              </div>
+            )
+          })}
+        </div>
       </div>
-    )
-  })}
-</div>
-
-
 
       {/* Repairs Table */}
       <div className="overflow-x-auto rounded-lg border border-gray-200 shadow">
@@ -365,7 +363,6 @@ export default function Home() {
       `}>
         {toast.message}
       </div>
-
     </main>
   )
 }
