@@ -39,6 +39,13 @@ export default function Home() {
     fetchRepairs()
   }, [])
 
+  // helper to parse dd/mm/yyyy date
+  const parseDateDMY = (str: string) => {
+    if (!str) return new Date()
+    const [day, month, year] = str.split('/')
+    return new Date(Number(year), Number(month) - 1, Number(day))
+  }
+
   // CSV Upload handler
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -56,11 +63,11 @@ export default function Home() {
       // skip first row (title row)
       const csvText = lines.slice(1).join('\n')
 
-      // parse as tab-separated
+      // parse tab-separated
       const { data } = Papa.parse(csvText, {
         header: true,
         skipEmptyLines: true,
-        delimiter: '\t', // important for eBay CSVs
+        delimiter: '\t', // tab for eBay CSV
       })
 
       console.log('Parsed CSV:', data)
@@ -70,7 +77,7 @@ export default function Home() {
         item_name: row['Item title']?.trim() || '',
         quantity: Number(row['Quantity'] || 1),
         price: Number(String(row['Total price'] || '0').replace(/[^0-9.-]+/g, '')),
-        date_sold: new Date(row['Sale date'] || Date.now()).toISOString(),
+        date_sold: parseDateDMY(row['Sale date']).toISOString(),
         source: 'csv',
       }))
 
