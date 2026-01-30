@@ -53,12 +53,14 @@ export default function Home() {
       const text = await file.text()
       const lines = text.split(/\r?\n/)
 
-      // skip first row if it is a title row
+      // skip first row (title row)
       const csvText = lines.slice(1).join('\n')
 
+      // parse as tab-separated
       const { data } = Papa.parse(csvText, {
         header: true,
         skipEmptyLines: true,
+        delimiter: '\t', // important for eBay CSVs
       })
 
       console.log('Parsed CSV:', data)
