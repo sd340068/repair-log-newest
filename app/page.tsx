@@ -31,7 +31,6 @@ export default function Home() {
       .from('repairs')
       .select('*')
       .order('date_sold', { ascending: false })
-
     if (error) console.error(error)
     else setRepairs(data || [])
   }
@@ -55,36 +54,53 @@ export default function Home() {
           Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
+            worker: true,
             complete: (results: any) => resolve(results.data),
             error: (err: any) => reject(err),
           })
         })
 
       const data = await parseCSV(file)
+      console.log('Parsed CSV data:', data)
 
+      // Map CSV rows to your table
       const rows = data.map((row: any) => ({
-        listing_id: row['Order number'],
-        item_name: row['Item title'],
-        price: Number(String(row['Total price']).replace(/[^0-9.-]+/g, '')),
-        quantity: Number(row['Quantity'] || 1),
-        date_sold: new Date(row['Sale date']).toISOString(),
+        listing_id:
+          row['Order number'] || row['Order #'] || row['order number'] || '',
+        item_name:
+          row['Item title'] || row['Item Name'] || row['item title'] || '',
+        price: Number(
+          String(row['Total price'] || row['Price'] || '0').replace(/[^0-9.-]+/g, '')
+        ),
+        quantity: Number(row['Quantity'] || row['Qty'] || 1),
+        date_sold:
+          new Date(row['Sale date'] || row['Date Sold'] || Date.now()).toISOString(),
         source: 'csv',
       }))
 
+      // Remove rows without listing_id
+      const validRows = rows.filter((r) => r.listing_id)
+
+      if (validRows.length === 0) {
+        alert('No valid rows found in CSV')
+        setLoading(false)
+        return
+      }
+
       const { error } = await supabase
         .from('repairs')
-        .upsert(rows, { onConflict: 'listing_id' })
+        .upsert(validRows, { onConflict: 'listing_id' })
 
       if (error) {
         console.error(error)
-        alert('Import failed')
+        alert('Import failed: ' + error.message)
       } else {
         await fetchRepairs()
-        alert('Imported successfully')
+        alert(`Imported ${validRows.length} rows successfully`)
       }
-    } catch (err) {
-      console.error(err)
-      alert('CSV parse failed')
+    } catch (err: any) {
+      console.error('CSV parsing error:', err)
+      alert('CSV parsing failed. Check console for details.')
     } finally {
       setLoading(false)
     }
