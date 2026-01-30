@@ -23,7 +23,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
-  const [filterPeriod, setFilterPeriod] = useState<'thisMonth'|'lastMonth'|'thisYear'|'lastYear'|'custom'>('thisMonth')
+  const [filterPeriod, setFilterPeriod] =
+    useState<'thisMonth'|'lastMonth'|'thisYear'|'lastYear'|'custom'>('thisMonth')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
 
@@ -34,6 +35,10 @@ export default function Home() {
     quantity: '',
     date_sold: '',
   })
+
+  // --- Edit/Delete state ---
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editValues, setEditValues] = useState<Partial<Repair>>({})
 
   // --- Ensure client-only render ---
   useEffect(() => {
@@ -56,8 +61,8 @@ export default function Home() {
       .from('repairs')
       .select('*')
       .order('date_sold', { ascending: false })
-    if (error) console.error(error)
-    else setRepairs(data || [])
+
+    if (!error) setRepairs(data || [])
   }
 
   useEffect(() => {
@@ -101,92 +106,128 @@ export default function Home() {
     }
   })
 
-  // --- Key items including Laptop ---
+  // --- Key items ---
   const keyItems = ['Nintendo','Playstation','Xbox','iPad','Laptop']
 
   const totals = keyItems.map(item=>{
-    const filtered = filterRepairs.filter(r=>r.item_name?.toLowerCase().includes(item.toLowerCase()))
-    const totalCount = filtered.reduce((sum,r)=>sum + (r.quantity??0),0)
-    const totalAmount = filtered.reduce((sum,r)=>sum + (r.price??0),0)
-    return { item, totalCount, totalAmount }
+    const filtered = filterRepairs.filter(r =>
+      r.item_name?.toLowerCase().includes(item.toLowerCase())
+    )
+    return {
+      item,
+      totalCount: filtered.reduce((s,r)=>s+(r.quantity??0),0),
+      totalAmount: filtered.reduce((s,r)=>s+(r.price??0),0)
+    }
   })
 
-  const allTotalCount = filterRepairs.reduce((sum,r)=>sum+(r.quantity??0),0)
-  const allTotalAmount = filterRepairs.reduce((sum,r)=>sum+(r.price??0),0)
+  const allTotalCount = filterRepairs.reduce((s,r)=>s+(r.quantity??0),0)
+  const allTotalAmount = filterRepairs.reduce((s,r)=>s+(r.price??0),0)
 
-  // --- Handlers ---
+  // --- CSV Upload ---
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>)=>{
     const file = e.target.files?.[0]
     if(!file) return
     setSelectedFile(file)
     setLoading(true)
+
     try {
-      const Papa = (await import('papaparse')).default
       const buffer = await file.arrayBuffer()
       let text:string
-      try { text = new TextDecoder('utf-16').decode(buffer); if(!text.includes('Order number')) throw new Error() } 
-      catch { text = new TextDecoder('utf-8').decode(buffer) }
+      try {
+        text = new TextDecoder('utf-16').decode(buffer)
+        if(!text.includes('Order number')) throw new Error()
+      } catch {
+        text = new TextDecoder('utf-8').decode(buffer)
+      }
+
       const lines = text.split(/\r?\n/).filter(l=>l.trim())
-      if(lines.length<2){ alert('CSV too short'); setLoading(false); return }
-      const delimiter = lines[0].includes('\t')?'\t':','
-      const headers = lines[0].split(delimiter).map(h=>h.trim())
+      const delimiter = lines[0].includes('\t') ? '\t' : ','
+      const headers = lines[0].split(delimiter)
+
       const rows = lines.slice(1).map(line=>{
-        const values = line.split(delimiter).map(v=>v.trim())
+        const values = line.split(delimiter)
         const obj:any={}
-        headers.forEach((h,i)=>obj[h]=values[i]||'')
+        headers.forEach((h,i)=>obj[h.trim()]=values[i]?.trim())
         return obj
       })
 
-      // Map rows
       const mapped = rows.map(row=>{
-        const name=row['Item title']?.trim()||''
-        const date=parseDateDMY(row['Sale date']||'')
+        const date = parseDateDMY(row['Sale date'])
         if(!date) return null
         return {
-          listing_id:row['Order number']?.trim()||'',
-          item_name:name,
-          quantity:Number(row['Quantity']||1),
-          price:Number(String(row['Total price']||'0').replace(/[^0-9.-]+/g,'')),
-          date_sold:date.toISOString(),
-          source:'csv'
+          listing_id: row['Order number'],
+          item_name: row['Item title'],
+          quantity: Number(row['Quantity']||1),
+          price: Number(String(row['Total price']||'0').replace(/[^0-9.-]/g,'')),
+          date_sold: date.toISOString(),
+          source: 'csv'
         }
-      }).filter(r=>r && r.item_name && /repair|service/i.test(r.item_name)) as Repair[]
+      }).filter(r=>r && /repair|service/i.test(r.item_name)) as Repair[]
 
-      // --- Deduplicate by listing_id (prevents Supabase ON CONFLICT error) ---
-      const uniqueMap = new Map<string, Repair>()
-      for (const r of mapped){
-        if(r.listing_id) uniqueMap.set(r.listing_id, r) // keeps last occurrence if duplicates
-      }
-      const uniqueRows = Array.from(uniqueMap.values())
+      const unique = new Map<string, Repair>()
+      mapped.forEach(r=>unique.set(r.listing_id,r))
 
-      if(uniqueRows.length===0){ alert('No valid rows'); setLoading(false); return }
+      await supabase
+        .from('repairs')
+        .upsert(Array.from(unique.values()), { onConflict:'listing_id' })
 
-      const {error} = await supabase.from('repairs').upsert(uniqueRows,{onConflict:'listing_id'})
-      if(error) alert('Supabase insert failed: '+error.message)
-      else await fetchRepairs()
-
-    } catch(err){ console.error(err); alert('CSV failed') }
-    finally{ setLoading(false) }
+      await fetchRepairs()
+    } finally {
+      setLoading(false)
+    }
   }
 
+  // --- Manual Entry ---
   const handleManualSubmit = async (e: React.FormEvent)=>{
     e.preventDefault()
     setLoading(true)
-    try{
-      const {error} = await supabase.from('repairs').upsert([{
-        listing_id: manual.listing_id,
-        item_name: manual.item_name,
-        price:Number(manual.price),
-        quantity:Number(manual.quantity),
-        date_sold:new Date(manual.date_sold).toISOString(),
-        source:'manual'
-      }])
-      if(error) alert('Failed to add repair')
-      else {
-        setManual({ listing_id:'', item_name:'', price:'', quantity:'', date_sold:'' })
-        await fetchRepairs()
-      }
-    } finally{ setLoading(false) }
+
+    await supabase.from('repairs').upsert([{
+      listing_id: manual.listing_id,
+      item_name: manual.item_name,
+      price: Number(manual.price),
+      quantity: Number(manual.quantity),
+      date_sold: new Date(manual.date_sold).toISOString(),
+      source: 'manual'
+    }])
+
+    setManual({ listing_id:'', item_name:'', price:'', quantity:'', date_sold:'' })
+    await fetchRepairs()
+    setLoading(false)
+  }
+
+  // --- Edit/Delete ---
+  const handleEdit = (r: Repair) => {
+    setEditingId(r.id)
+    setEditValues({ ...r })
+  }
+
+  const handleEditSave = async () => {
+    if (!editingId) return
+    setLoading(true)
+
+    await supabase
+      .from('repairs')
+      .update({
+        item_name: editValues.item_name,
+        price: editValues.price,
+        quantity: editValues.quantity,
+        date_sold: editValues.date_sold,
+      })
+      .eq('id', editingId)
+
+    setEditingId(null)
+    setEditValues({})
+    await fetchRepairs()
+    setLoading(false)
+  }
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Delete this repair?')) return
+    setLoading(true)
+    await supabase.from('repairs').delete().eq('id', id)
+    await fetchRepairs()
+    setLoading(false)
   }
 
   const handleLogout = async ()=>{
@@ -196,116 +237,105 @@ export default function Home() {
 
   if(!mounted || !sessionChecked) return null
 
-  // --- Render ---
   return (
-    <main className="min-h-screen bg-gray-50 font-sans p-6 space-y-8">
+    <main className="min-h-screen bg-gray-50 p-6 space-y-8">
 
       {/* Header */}
-      <div className="flex justify-center items-center mb-6 relative">
-        <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 text-center">
+      <div className="flex justify-center relative">
+        <h1 className="text-4xl font-extrabold">
           <span className="text-blue-900">Repair</span> Log
         </h1>
-        <button onClick={handleLogout} className="absolute right-0 px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition">
+        <button onClick={handleLogout}
+          className="absolute right-0 bg-red-600 text-white px-4 py-2 rounded">
           Logout
         </button>
       </div>
 
-      {/* CSV Upload */}
-      <div className="p-4 bg-white border border-gray-200 rounded-xl shadow hover:shadow-lg transition space-y-2 max-w-md mx-auto">
-        <h2 className="text-lg font-semibold text-gray-900">Upload CSV</h2>
-        <div className="flex items-center gap-3">
-          <input id="file-upload" type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
-          <label htmlFor="file-upload" className="px-4 py-2 bg-blue-900 text-white font-semibold rounded-lg cursor-pointer hover:bg-blue-800 transition">
-            Choose File
-          </label>
-          {selectedFile && <span className="text-gray-700 font-medium truncate max-w-xs">{selectedFile.name}</span>}
-        </div>
-        {loading && <p className="mt-1 text-gray-500 italic text-sm">Processing…</p>}
-      </div>
-
-      {/* Manual Entry */}
-      <form onSubmit={handleManualSubmit} className="p-4 bg-white border border-gray-200 rounded-xl shadow hover:shadow-lg transition max-w-3xl mx-auto">
-        <h2 className="text-lg font-semibold mb-3 text-gray-900">Manual Entry</h2>
-        <div className="flex flex-wrap gap-3">
-          {['listing_id','item_name','price','quantity','date_sold'].map(f=>(
-            <input key={f} type={f==='price'||f==='quantity'?'number':f==='date_sold'?'date':'text'} 
-              placeholder={f==='listing_id'?'Order #':f.replace('_',' ').replace(/\b\w/g,c=>c.toUpperCase())}
-              value={(manual as any)[f]} 
-              onChange={e=>setManual({...manual,[f]:e.target.value})} 
-              required className="flex-1 min-w-[110px] p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900 text-gray-900 placeholder-gray-400"
-            />
-          ))}
-          <button type="submit" className="px-4 py-2 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-800 transition">
-            Add
-          </button>
-        </div>
-      </form>
-
-      {/* Filter & Totals */}
-      <div className="p-6 bg-white border border-gray-200 rounded-xl shadow flex flex-col items-center gap-6">
-        <div className="flex flex-col md:flex-row items-center gap-2 w-full justify-center">
-          <label className="font-bold text-xl text-gray-900">Filter:</label>
-          <select value={filterPeriod} onChange={e=>setFilterPeriod(e.target.value as any)}
-            className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900 text-gray-900"
-          >
-            <option value="thisMonth">This Month</option>
-            <option value="lastMonth">Last Month</option>
-            <option value="thisYear">This Year</option>
-            <option value="lastYear">Last Year</option>
-            <option value="custom">Custom Date</option>
-          </select>
-        </div>
-
-        {filterPeriod==='custom' && (
-          <div className="flex items-center gap-2 mt-2 md:mt-0">
-            <input type="date" value={customStart} onChange={e=>setCustomStart(e.target.value)}
-              className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900 text-gray-900"/>
-            <span className="text-gray-700">to</span>
-            <input type="date" value={customEnd} onChange={e=>setCustomEnd(e.target.value)}
-              className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900 text-gray-900"/>
-          </div>
-        )}
-
-        {/* All Items Total */}
-        <div className="bg-blue-100 w-full md:w-96 p-6 rounded-lg shadow flex flex-col items-center justify-center mt-4">
-          <span className="font-bold text-3xl text-blue-900">{allTotalCount}</span>
-          <span className="font-semibold text-gray-700 text-lg mt-1">All Items</span>
-          <span className="text-gray-500 text-sm mt-1">£{allTotalAmount.toFixed(2)}</span>
-        </div>
-
-        {/* Key Items Tiles including Laptop */}
-        <div className="flex flex-wrap gap-4 justify-center w-full">
-          {totals.map(t=>(
-            <div key={t.item} className="bg-gray-50 p-4 rounded-lg shadow flex flex-col items-center justify-center min-w-[120px]">
-              <span className="font-semibold text-blue-900 text-xl">{t.totalCount}</span>
-              <span className="font-medium text-gray-700 mt-1">{t.item}</span>
-              <span className="text-gray-500 text-sm mt-1">£{t.totalAmount.toFixed(2)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Repairs Table */}
-      <div className="overflow-x-auto rounded-lg border border-gray-200 shadow">
-        <table className="table-auto w-full border-collapse text-gray-900 min-w-[600px]">
-          <thead className="bg-blue-900 text-white sticky top-0">
-            <tr>{['Date Sold','Item','Order #','Qty','Price','Source'].map(h=><th key={h} className="px-4 py-2 border">{h}</th>)}</tr>
+      <div className="overflow-x-auto border rounded shadow">
+        <table className="w-full min-w-[800px]">
+          <thead className="bg-blue-900 text-white">
+            <tr>
+              {['Date','Item','Order #','Qty','Price','Source','Actions']
+                .map(h=>(
+                  <th key={h} className="px-4 py-2 border">{h}</th>
+                ))}
+            </tr>
           </thead>
           <tbody>
-            {repairs.map(r=>(
-              <tr key={r.id} className={`${r.source==='manual'?'bg-gray-50':'bg-white'} odd:bg-white even:bg-gray-50`}>
-                <td className="px-4 py-2 border">{r.date_sold?.slice(0,10)??''}</td>
-                <td className="px-4 py-2 border">{r.item_name??''}</td>
-                <td className="px-4 py-2 border">{r.listing_id??''}</td>
-                <td className="px-4 py-2 border text-center">{r.quantity??0}</td>
-                <td className="px-4 py-2 border">£{r.price?.toFixed(2)??'0.00'}</td>
-                <td className="px-4 py-2 border">{r.source??''}</td>
-              </tr>
-            ))}
+            {repairs.map(r=>{
+              const editing = editingId===r.id
+              return (
+                <tr key={r.id} className="odd:bg-white even:bg-gray-50">
+                  <td className="border px-2">
+                    {editing
+                      ? <input type="date" value={String(editValues.date_sold).slice(0,10)}
+                          onChange={e=>setEditValues(v=>({...v,date_sold:e.target.value}))}
+                          className="border p-1"/>
+                      : r.date_sold.slice(0,10)}
+                  </td>
+
+                  <td className="border px-2">
+                    {editing
+                      ? <input value={editValues.item_name||''}
+                          onChange={e=>setEditValues(v=>({...v,item_name:e.target.value}))}
+                          className="border p-1 w-full"/>
+                      : r.item_name}
+                  </td>
+
+                  <td className="border px-2">{r.listing_id}</td>
+
+                  <td className="border px-2 text-center">
+                    {editing
+                      ? <input type="number" value={editValues.quantity||0}
+                          onChange={e=>setEditValues(v=>({...v,quantity:+e.target.value}))}
+                          className="border p-1 w-16"/>
+                      : r.quantity}
+                  </td>
+
+                  <td className="border px-2">
+                    {editing
+                      ? <input type="number" value={editValues.price||0}
+                          onChange={e=>setEditValues(v=>({...v,price:+e.target.value}))}
+                          className="border p-1 w-24"/>
+                      : `£${r.price.toFixed(2)}`}
+                  </td>
+
+                  <td className="border px-2">{r.source}</td>
+
+                  <td className="border px-2 text-center space-x-2">
+                    {editing ? (
+                      <>
+                        <button onClick={handleEditSave}
+                          className="bg-green-600 text-white px-2 py-1 rounded">
+                          Save
+                        </button>
+                        <button onClick={()=>setEditingId(null)}
+                          className="bg-gray-400 text-white px-2 py-1 rounded">
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={()=>handleEdit(r)}
+                          className="bg-blue-600 text-white px-2 py-1 rounded">
+                          Edit
+                        </button>
+                        <button onClick={()=>handleDelete(r.id)}
+                          className="bg-red-600 text-white px-2 py-1 rounded">
+                          Delete
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
 
+      {loading && <p className="text-center italic">Processing…</p>}
     </main>
   )
 }
