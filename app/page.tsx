@@ -254,15 +254,18 @@ export default function Home() {
       <div className="p-6 bg-white border border-gray-200 rounded-xl shadow flex flex-col items-center gap-6">
         <div className="flex flex-col md:flex-row items-center gap-2 w-full justify-center">
           <label className="font-bold text-xl text-gray-900">Filter:</label>
-          <select value={filterPeriod} onChange={e=>setFilterPeriod(e.target.value as any}
-            className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900 text-gray-900"
-          >
-            <option value="thisMonth">This Month</option>
-            <option value="lastMonth">Last Month</option>
-            <option value="thisYear">This Year</option>
-            <option value="lastYear">Last Year</option>
-            <option value="custom">Custom Date</option>
-          </select>
+<select
+  value={filterPeriod}
+  onChange={e => setFilterPeriod(e.target.value as any)} // ✅ fixed
+  className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900 text-gray-900"
+>
+  <option value="thisMonth">This Month</option>
+  <option value="lastMonth">Last Month</option>
+  <option value="thisYear">This Year</option>
+  <option value="lastYear">Last Year</option>
+  <option value="custom">Custom Date</option>
+</select>
+
         </div>
 
         {filterPeriod==='custom' && (
