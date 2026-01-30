@@ -135,6 +135,8 @@ export default function Home() {
         headers.forEach((h,i)=>obj[h]=values[i]||'')
         return obj
       })
+
+      // Map rows
       const mapped = rows.map(row=>{
         const name=row['Item title']?.trim()||''
         const date=parseDateDMY(row['Sale date']||'')
@@ -148,10 +150,20 @@ export default function Home() {
           source:'csv'
         }
       }).filter(r=>r && r.item_name && /repair|service/i.test(r.item_name)) as Repair[]
-      if(mapped.length===0){ alert('No valid rows'); setLoading(false); return }
-      const {error}=await supabase.from('repairs').upsert(mapped,{onConflict:'listing_id'})
-      if(error) alert('Supabase insert failed:'+error.message)
+
+      // --- Deduplicate by listing_id (prevents Supabase ON CONFLICT error) ---
+      const uniqueMap = new Map<string, Repair>()
+      for (const r of mapped){
+        if(r.listing_id) uniqueMap.set(r.listing_id, r) // keeps last occurrence if duplicates
+      }
+      const uniqueRows = Array.from(uniqueMap.values())
+
+      if(uniqueRows.length===0){ alert('No valid rows'); setLoading(false); return }
+
+      const {error} = await supabase.from('repairs').upsert(uniqueRows,{onConflict:'listing_id'})
+      if(error) alert('Supabase insert failed: '+error.message)
       else await fetchRepairs()
+
     } catch(err){ console.error(err); alert('CSV failed') }
     finally{ setLoading(false) }
   }
