@@ -55,15 +55,20 @@ export default function Home() {
             header: true,
             skipEmptyLines: true,
             worker: true,
-            complete: (results: any) => resolve(results.data),
-            error: (err: any) => reject(err),
+            beforeFirstChunk: (chunk) => {
+              // Remove first row (row 1) if it contains titles or blank
+              const lines = chunk.split(/\r?\n/)
+              lines.shift()
+              return lines.join('\n')
+            },
+            complete: (results) => resolve(results.data),
+            error: (err) => reject(err),
           })
         })
 
       const data = await parseCSV(file)
       console.log('Parsed CSV data:', data)
 
-      // Map CSV rows to your table
       const rows = data.map((row: any) => ({
         listing_id:
           row['Order number'] || row['Order #'] || row['order number'] || '',
@@ -78,7 +83,6 @@ export default function Home() {
         source: 'csv',
       }))
 
-      // Remove rows without listing_id
       const validRows = rows.filter((r) => r.listing_id)
 
       if (validRows.length === 0) {
