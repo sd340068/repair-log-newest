@@ -17,18 +17,23 @@ export default function Home() {
   const [repairs, setRepairs] = useState<Repair[]>([])
   const [loading, setLoading] = useState(false)
 
-  // Fetch data
+  const [manual, setManual] = useState({
+    listing_id: '',
+    item_name: '',
+    price: '',
+    quantity: '',
+    date_sold: '',
+  })
+
+  // Fetch repairs from Supabase
   const fetchRepairs = async () => {
     const { data, error } = await supabase
       .from('repairs')
       .select('*')
       .order('date_sold', { ascending: false })
 
-    if (error) {
-      console.error(error)
-    } else {
-      setRepairs(data || [])
-    }
+    if (error) console.error(error)
+    else setRepairs(data || [])
   }
 
   useEffect(() => {
@@ -36,61 +41,139 @@ export default function Home() {
   }, [])
 
   // CSV Upload handler
-  const handleFileUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
     setLoading(true)
 
-    // 🔑 Dynamic import — THIS is what fixes Vercel
-    const Papa = (await import('papaparse')).default
+    try {
+      const Papa = (await import('papaparse')).default
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results: any) => {
-        const rows = results.data.map((row: any) => ({
-          listing_id: row['Order number'],
-          item_name: row['Item title'],
-          price: Number(
-            String(row['Total price']).replace(/[^0-9.-]+/g, '')
-          ),
-          quantity: Number(row['Quantity'] || 1),
-          date_sold: new Date(row['Sale date']).toISOString(),
-          source: 'csv',
-        }))
+      const parseCSV = (file: File) =>
+        new Promise<any[]>((resolve, reject) => {
+          Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results: any) => resolve(results.data),
+            error: (err: any) => reject(err),
+          })
+        })
 
-        const { error } = await supabase
-          .from('repairs')
-          .upsert(rows, { onConflict: 'listing_id' })
+      const data = await parseCSV(file)
 
-        if (error) {
-          console.error(error)
-          alert('Import failed')
-        } else {
-          await fetchRepairs()
-          alert('Imported successfully')
-        }
+      const rows = data.map((row: any) => ({
+        listing_id: row['Order number'],
+        item_name: row['Item title'],
+        price: Number(String(row['Total price']).replace(/[^0-9.-]+/g, '')),
+        quantity: Number(row['Quantity'] || 1),
+        date_sold: new Date(row['Sale date']).toISOString(),
+        source: 'csv',
+      }))
 
-        setLoading(false)
-      },
-    })
+      const { error } = await supabase
+        .from('repairs')
+        .upsert(rows, { onConflict: 'listing_id' })
+
+      if (error) {
+        console.error(error)
+        alert('Import failed')
+      } else {
+        await fetchRepairs()
+        alert('Imported successfully')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('CSV parse failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Manual order submission
+  const handleManualSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+
+    try {
+      const { error } = await supabase.from('repairs').upsert([
+        {
+          listing_id: manual.listing_id,
+          item_name: manual.item_name,
+          price: Number(manual.price),
+          quantity: Number(manual.quantity),
+          date_sold: new Date(manual.date_sold).toISOString(),
+          source: 'manual',
+        },
+      ])
+
+      if (error) {
+        console.error(error)
+        alert('Failed to add repair')
+      } else {
+        setManual({ listing_id: '', item_name: '', price: '', quantity: '', date_sold: '' })
+        await fetchRepairs()
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
     <main style={{ padding: 20 }}>
       <h1>Repair Log</h1>
 
-      <input
-        type="file"
-        accept=".csv"
-        onChange={handleFileUpload}
-      />
+      {/* CSV Import */}
+      <div style={{ marginBottom: 20 }}>
+        <input type="file" accept=".csv" onChange={handleFileUpload} />
+      </div>
 
-      {loading && <p>Importing…</p>}
+      {loading && <p>Processing…</p>}
 
+      {/* Manual Entry */}
+      <form onSubmit={handleManualSubmit} style={{ marginBottom: 20 }}>
+        <h2>Manual Entry</h2>
+        <input
+          type="text"
+          placeholder="Order #"
+          value={manual.listing_id}
+          onChange={(e) => setManual({ ...manual, listing_id: e.target.value })}
+          required
+        />
+        <input
+          type="text"
+          placeholder="Item Name"
+          value={manual.item_name}
+          onChange={(e) => setManual({ ...manual, item_name: e.target.value })}
+          required
+        />
+        <input
+          type="number"
+          placeholder="Price"
+          value={manual.price}
+          onChange={(e) => setManual({ ...manual, price: e.target.value })}
+          required
+        />
+        <input
+          type="number"
+          placeholder="Quantity"
+          value={manual.quantity}
+          onChange={(e) => setManual({ ...manual, quantity: e.target.value })}
+          required
+        />
+        <input
+          type="date"
+          placeholder="Date Sold"
+          value={manual.date_sold}
+          onChange={(e) => setManual({ ...manual, date_sold: e.target.value })}
+          required
+        />
+        <button type="submit" style={{ marginLeft: 10 }}>
+          Add Repair
+        </button>
+      </form>
+
+      {/* Table */}
       <table
         border={1}
         cellPadding={6}
