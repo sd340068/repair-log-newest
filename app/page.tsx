@@ -16,22 +16,28 @@ type Repair = {
 
 export default function Home() {
   const router = useRouter()
-  const [checkingAuth, setCheckingAuth] = useState(true)
+const [checkingAuth, setCheckingAuth] = useState(true)
 
-  // --- AUTH CHECK ---
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
+useEffect(() => {
+  const checkAuth = async () => {
+    try {
+      const { data, error } = await supabase.auth.getSession()
+      const session = data?.session ?? null
       if (!session) {
-        router.push('/login') // redirect if not logged in
+        router.push('/login')
       } else {
         setCheckingAuth(false)
       }
+    } catch (err) {
+      console.error('Auth check failed:', err)
+      router.push('/login')
     }
-    checkAuth()
-  }, [router])
+  }
+  checkAuth()
+}, [router])
 
-  if (checkingAuth) return <p className="text-center mt-10 text-gray-500">Checking authentication…</p>
+if (checkingAuth) return <p className="text-center mt-10 text-gray-500">Checking authentication…</p>
+
 
   // --- STATES ---
   const [repairs, setRepairs] = useState<Repair[]>([])
