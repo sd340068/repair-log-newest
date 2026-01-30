@@ -238,7 +238,38 @@ export default function Home() {
       {/* CSV Upload */}
       <div className="bg-white p-4 rounded shadow max-w-md mx-auto">
         <h2 className="font-semibold mb-2">Upload CSV</h2>
-        <input type="file" accept=".csv" onChange={handleFileUpload} />
+       <label className="inline-flex items-center gap-3 cursor-pointer">
+  <input
+    type="file"
+    accept=".csv"
+    onChange={handleFileUpload}
+    className="hidden"
+  />
+
+  <span
+    className="
+      border border-gray-300
+      bg-gray-100
+      hover:bg-gray-200
+      text-gray-800
+      px-4 py-2
+      rounded
+      shadow-sm
+      transition
+      active:scale-95
+      select-none
+    "
+  >
+    Choose file
+  </span>
+
+  {selectedFile && (
+    <span className="text-sm text-gray-600 truncate max-w-[200px]">
+      {selectedFile.name}
+    </span>
+  )}
+</label>
+
         {selectedFile && <p className="text-sm mt-1">{selectedFile.name}</p>}
       </div>
 
