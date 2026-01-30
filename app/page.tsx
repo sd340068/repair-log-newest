@@ -31,7 +31,8 @@ export default function Home() {
       .from('repairs')
       .select('*')
       .order('date_sold', { ascending: false })
-    if (error) console.error(error)
+
+    if (error) console.error('Supabase fetch error:', error)
     else setRepairs(data || [])
   }
 
@@ -49,25 +50,23 @@ export default function Home() {
     try {
       const Papa = (await import('papaparse')).default
 
-      const parseCSV = (file: File) =>
-        new Promise<any[]>((resolve, reject) => {
-          Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            worker: true,
-            beforeFirstChunk: (chunk) => {
-              // Remove first row (row 1) if it contains titles or blank
-              const lines = chunk.split(/\r?\n/)
-              lines.shift()
-              return lines.join('\n')
-            },
-            complete: (results) => resolve(results.data),
-            error: (err) => reject(err),
-          })
+      const data: any[] = await new Promise((resolve, reject) => {
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          worker: false, // safe for debugging first
+          beforeFirstChunk: (chunk) => {
+            // Remove first row (title row)
+            const lines = chunk.split(/\r?\n/)
+            lines.shift()
+            return lines.join('\n')
+          },
+          complete: (results) => resolve(results.data),
+          error: (err) => reject(err),
         })
+      })
 
-      const data = await parseCSV(file)
-      console.log('Parsed CSV data:', data)
+      console.log('Parsed CSV:', data)
 
       const rows = data.map((row: any) => ({
         listing_id:
@@ -84,6 +83,7 @@ export default function Home() {
       }))
 
       const validRows = rows.filter((r) => r.listing_id)
+      console.log('Rows to insert:', validRows)
 
       if (validRows.length === 0) {
         alert('No valid rows found in CSV')
@@ -96,15 +96,15 @@ export default function Home() {
         .upsert(validRows, { onConflict: 'listing_id' })
 
       if (error) {
-        console.error(error)
-        alert('Import failed: ' + error.message)
+        console.error('Supabase upsert error:', error)
+        alert('Supabase insert failed: ' + error.message)
       } else {
         await fetchRepairs()
         alert(`Imported ${validRows.length} rows successfully`)
       }
-    } catch (err: any) {
-      console.error('CSV parsing error:', err)
-      alert('CSV parsing failed. Check console for details.')
+    } catch (err) {
+      console.error('CSV parse/upload error:', err)
+      alert('CSV import failed. Check console for details.')
     } finally {
       setLoading(false)
     }
@@ -128,7 +128,7 @@ export default function Home() {
       ])
 
       if (error) {
-        console.error(error)
+        console.error('Manual insert error:', error)
         alert('Failed to add repair')
       } else {
         setManual({ listing_id: '', item_name: '', price: '', quantity: '', date_sold: '' })
