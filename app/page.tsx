@@ -345,17 +345,36 @@ export default function Home() {
                   <td className="border px-2 text-center space-x-1">
                     {editing ? (
                       <>
-                        <button onClick={handleEditSave}
-                          className="bg-green-600 text-white px-2 py-1 rounded">Save</button>
-                        <button onClick={()=>setEditingId(null)}
-                          className="bg-gray-400 text-white px-2 py-1 rounded">Cancel</button>
+<button
+  onClick={handleEditSave}
+  className="bg-green-600 text-white px-2 py-0.5 text-sm rounded"
+>
+  Save
+</button>
+
+<button
+  onClick={() => setEditingId(null)}
+  className="bg-gray-400 text-white px-2 py-0.5 text-sm rounded"
+>
+  Cancel
+</button>
                       </>
                     ) : (
                       <>
-                        <button onClick={()=>handleEdit(r)}
-                          className="bg-blue-600 text-white px-2 py-1 rounded">Edit</button>
-                        <button onClick={()=>handleDelete(r.id)}
-                          className="bg-red-600 text-white px-2 py-1 rounded">Delete</button>
+<button
+  onClick={() => handleEdit(r)}
+  className="bg-blue-600 text-white px-2 py-0.5 text-sm rounded"
+>
+  Edit
+</button>
+
+<button
+  onClick={() => handleDelete(r.id)}
+  className="bg-red-600 text-white px-2 py-0.5 text-sm rounded"
+>
+  Delete
+</button>
+
                       </>
                     )}
                   </td>
