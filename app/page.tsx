@@ -347,7 +347,7 @@ export default function Home() {
                       <>
 <button
   onClick={handleEditSave}
-  className="bg-green-600 text-white px-2 py-0.5 text-sm rounded"
+  className="bg-green-500 text-white px-2 py-0.5 text-sm rounded"
 >
   Save
 </button>
@@ -363,14 +363,14 @@ export default function Home() {
                       <>
 <button
   onClick={() => handleEdit(r)}
-  className="bg-blue-600 text-white px-2 py-0.5 text-sm rounded"
+  className="bg-blue-500 text-white px-2 py-0.5 text-sm rounded"
 >
   Edit
 </button>
 
 <button
   onClick={() => handleDelete(r.id)}
-  className="bg-red-600 text-white px-2 py-0.5 text-sm rounded"
+  className="bg-red-500 text-white px-2 py-0.5 text-sm rounded"
 >
   Delete
 </button>
