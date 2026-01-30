@@ -311,7 +311,7 @@ export default function Home() {
               const editing = editingId === r.id
               return (
                 <tr key={r.id} className="odd:bg-white even:bg-gray-50">
-                  <td className="border px-2">
+                  <td className="border px-2 py-3">
                     {editing
                       ? <input type="date"
                           value={String(editValues.date_sold).slice(0,10)}
