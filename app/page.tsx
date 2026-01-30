@@ -16,19 +16,18 @@ type Repair = {
 
 export default function Home() {
   const router = useRouter()
+  const [mounted, setMounted] = useState(false)
   const [checkingAuth, setCheckingAuth] = useState(true)
 
   // --- AUTH CHECK ---
   useEffect(() => {
+    setMounted(true)
     const checkAuth = async () => {
       try {
-        const { data, error } = await supabase.auth.getSession()
+        const { data } = await supabase.auth.getSession()
         const session = data?.session ?? null
-        if (!session) {
-          router.push('/login') // redirect if not logged in
-        } else {
-          setCheckingAuth(false)
-        }
+        if (!session) router.push('/login')
+        else setCheckingAuth(false)
       } catch (err) {
         console.error('Auth check failed:', err)
         router.push('/login')
@@ -37,7 +36,8 @@ export default function Home() {
     checkAuth()
   }, [router])
 
-  if (checkingAuth) return <p className="text-center mt-10 text-gray-500">Checking authentication…</p>
+  if (!mounted || checkingAuth)
+    return <p className="text-center mt-10 text-gray-500">Checking authentication…</p>
 
   // --- STATES ---
   const [repairs, setRepairs] = useState<Repair[]>([])
@@ -80,6 +80,7 @@ export default function Home() {
   const filterRepairsByPeriod = (repairs: Repair[]) => {
     const now = new Date()
     return repairs.filter((r) => {
+      if (!r.date_sold) return false
       const sold = new Date(r.date_sold)
       const soldYear = sold.getUTCFullYear()
       const soldMonth = sold.getUTCMonth()
@@ -101,27 +102,18 @@ export default function Home() {
     })
   }
 
-  const getUniqueRepairs = (repairs: Repair[]) => {
-    const map = new Map<string, Repair>()
-    for (const r of repairs) {
-      const key = r.listing_id || Math.random().toString(36).substring(2, 10)
-      if (!map.has(key)) map.set(key, r)
-    }
-    return Array.from(map.values())
-  }
+  const filteredRepairs = filterRepairsByPeriod(repairs)
 
-  const filteredRepairs = getUniqueRepairs(filterRepairsByPeriod(repairs))
   const keyItems = ['Nintendo', 'Playstation', 'Xbox', 'iPad']
-
   const totals = keyItems.map((item) => {
-    const filtered = filteredRepairs.filter(r => r.item_name.toLowerCase().includes(item.toLowerCase()))
-    const totalAmount = filtered.reduce((sum, r) => sum + r.price, 0)
-    const totalCount = filtered.reduce((sum, r) => sum + r.quantity, 0)
+    const filtered = filteredRepairs.filter(r => r.item_name?.toLowerCase().includes(item.toLowerCase()))
+    const totalAmount = filtered.reduce((sum, r) => sum + (r.price ?? 0), 0)
+    const totalCount = filtered.reduce((sum, r) => sum + (r.quantity ?? 0), 0)
     return { item, totalAmount, totalCount }
   })
 
-  const allItemsTotalCount = filteredRepairs.reduce((sum, r) => sum + r.quantity, 0)
-  const allItemsTotalPrice = filteredRepairs.reduce((sum, r) => sum + r.price, 0)
+  const allItemsTotalCount = filteredRepairs.reduce((sum, r) => sum + (r.quantity ?? 0), 0)
+  const allItemsTotalPrice = filteredRepairs.reduce((sum, r) => sum + (r.price ?? 0), 0)
 
   // --- HANDLERS ---
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -129,6 +121,7 @@ export default function Home() {
     if (!file) return
     setSelectedFile(file)
     setLoading(true)
+
     try {
       const Papa = (await import('papaparse')).default
       const arrayBuffer = await file.arrayBuffer()
@@ -172,35 +165,17 @@ export default function Home() {
             source: 'csv',
           }
         })
-        .filter(r => r)
-        .filter(r => r!.item_name)
-        .filter(r => /repair|service/i.test(r!.item_name)) as any[]
+        .filter(r => r && r.item_name && /repair|service/i.test(r.item_name)) as Repair[]
 
-      const uniqueRowsMap = new Map<string, any>()
-      for (const row of mappedRows) {
-        if (row.listing_id && !uniqueRowsMap.has(row.listing_id)) {
-          uniqueRowsMap.set(row.listing_id, row)
-        }
-      }
-      const uniqueRows = Array.from(uniqueRowsMap.values())
-
-      if (uniqueRows.length === 0) {
+      if (mappedRows.length === 0) {
         alert('No valid rows found in CSV')
         setLoading(false)
         return
       }
 
-      const { error } = await supabase
-        .from('repairs')
-        .upsert(uniqueRows, { onConflict: 'listing_id' })
-
-      if (error) {
-        console.error('Supabase upsert error:', error)
-        alert('Supabase insert failed: ' + error.message)
-      } else {
-        await fetchRepairs()
-        alert(`Imported ${uniqueRows.length} rows successfully`)
-      }
+      const { error } = await supabase.from('repairs').upsert(mappedRows, { onConflict: 'listing_id' })
+      if (error) alert('Supabase insert failed: ' + error.message)
+      else await fetchRepairs()
     } catch (err) {
       console.error('CSV parse/upload error:', err)
       alert('CSV import failed. Check console for details.')
@@ -223,10 +198,8 @@ export default function Home() {
           source: 'manual',
         },
       ])
-      if (error) {
-        console.error('Manual insert error:', error)
-        alert('Failed to add repair')
-      } else {
+      if (error) alert('Failed to add repair')
+      else {
         setManual({ listing_id: '', item_name: '', price: '', quantity: '', date_sold: '' })
         await fetchRepairs()
       }
@@ -357,12 +330,12 @@ export default function Home() {
           <tbody>
             {repairs.map((r) => (
               <tr key={r.id} className={`${r.source === 'manual' ? 'bg-gray-50' : 'bg-white'} odd:bg-white even:bg-gray-50`}>
-                <td className="px-4 py-2 border">{r.date_sold.slice(0, 10)}</td>
-                <td className="px-4 py-2 border">{r.item_name}</td>
-                <td className="px-4 py-2 border">{r.listing_id}</td>
-                <td className="px-4 py-2 border text-center">{r.quantity}</td>
-                <td className="px-4 py-2 border">£{r.price.toFixed(2)}</td>
-                <td className="px-4 py-2 border">{r.source}</td>
+                <td className="px-4 py-2 border">{r.date_sold?.slice(0, 10) ?? ''}</td>
+                <td className="px-4 py-2 border">{r.item_name ?? ''}</td>
+                <td className="px-4 py-2 border">{r.listing_id ?? ''}</td>
+                <td className="px-4 py-2 border text-center">{r.quantity ?? 0}</td>
+                <td className="px-4 py-2 border">£{r.price?.toFixed(2) ?? '0.00'}</td>
+                <td className="px-4 py-2 border">{r.source ?? ''}</td>
               </tr>
             ))}
           </tbody>
