@@ -101,7 +101,8 @@ export default function Home() {
     }
   })
 
-  const keyItems = ['Nintendo','Playstation','Xbox','iPad']
+  // --- Key items including Laptop ---
+  const keyItems = ['Nintendo','Playstation','Xbox','iPad','Laptop']
 
   const totals = keyItems.map(item=>{
     const filtered = filterRepairs.filter(r=>r.item_name?.toLowerCase().includes(item.toLowerCase()))
@@ -272,7 +273,7 @@ export default function Home() {
           <span className="text-gray-500 text-sm mt-1">£{allTotalAmount.toFixed(2)}</span>
         </div>
 
-        {/* Key Items Tiles */}
+        {/* Key Items Tiles including Laptop */}
         <div className="flex flex-wrap gap-4 justify-center w-full">
           {totals.map(t=>(
             <div key={t.item} className="bg-gray-50 p-4 rounded-lg shadow flex flex-col items-center justify-center min-w-[120px]">
