@@ -39,7 +39,7 @@ export default function Home() {
     fetchRepairs()
   }, [])
 
-  // helper to parse dd/mm/yyyy date
+  // helper to parse dd/mm/yyyy dates
   const parseDateDMY = (str: string) => {
     if (!str) return new Date()
     const [day, month, year] = str.split('/')
@@ -56,18 +56,28 @@ export default function Home() {
     try {
       const Papa = (await import('papaparse')).default
 
-      // read CSV as text
-      const text = await file.text()
-      const lines = text.split(/\r?\n/)
+      // Read file as ArrayBuffer to handle UTF-16 BOM
+      const arrayBuffer = await file.arrayBuffer()
+      const decoder = new TextDecoder('utf-16') // try UTF-16 first
+      let text = decoder.decode(arrayBuffer)
 
-      // skip first row (title row)
+      // fallback UTF-8 if first line is weird
+      if (!text.includes('Order number')) {
+        const decoderUtf8 = new TextDecoder('utf-8')
+        text = decoderUtf8.decode(arrayBuffer)
+      }
+
+      const lines = text.split(/\r?\n/)
+      // skip first row if title
       const csvText = lines.slice(1).join('\n')
 
-      // parse tab-separated
+      // detect delimiter: tab or comma
+      const delimiter = csvText.includes('\t') ? '\t' : ','
+
       const { data } = Papa.parse(csvText, {
         header: true,
         skipEmptyLines: true,
-        delimiter: '\t', // tab for eBay CSV
+        delimiter,
       })
 
       console.log('Parsed CSV:', data)
