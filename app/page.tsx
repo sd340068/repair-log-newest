@@ -25,7 +25,6 @@ export default function Home() {
     date_sold: '',
   })
 
-  // Fetch repairs from Supabase
   const fetchRepairs = async () => {
     const { data, error } = await supabase
       .from('repairs')
@@ -50,25 +49,56 @@ export default function Home() {
     try {
       const Papa = (await import('papaparse')).default
 
-      const data: any[] = await new Promise((resolve, reject) => {
-        Papa.parse(file, {
-          header: true,
-          skipEmptyLines: true,
-          worker: false, // safer for debugging
-          beforeFirstChunk: (chunk) => {
-            // Remove first row (title row)
-            const lines = chunk.split(/\r?\n/)
-            lines.shift()
-            return lines.join('\n')
-          },
-          complete: (results) => resolve(results.data),
-          error: (err) => reject(err),
+      const parseCSV = (file: File) =>
+        new Promise<any[]>((resolve, reject) => {
+          Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            worker: false,
+            encoding: 'UTF-8', // try UTF-8 first
+            beforeFirstChunk: (chunk) => {
+              // remove title row
+              const lines = chunk.split(/\r?\n/)
+              lines.shift()
+              return lines.join('\n')
+            },
+            complete: (results) => resolve(results.data),
+            error: (err) => reject(err),
+          })
         })
-      })
+
+      let data: any[] = await parseCSV(file)
+
+      // If all rows are empty, try UTF-16
+      const allEmpty = data.every((row) =>
+        Object.values(row).every((v) => v === '' || v === null)
+      )
+
+      if (allEmpty) {
+        console.warn('CSV seems empty, retrying with UTF-16')
+        const parseCSV_UTF16 = (file: File) =>
+          new Promise<any[]>((resolve, reject) => {
+            Papa.parse(file, {
+              header: true,
+              skipEmptyLines: true,
+              worker: false,
+              encoding: 'UTF-16',
+              beforeFirstChunk: (chunk) => {
+                const lines = chunk.split(/\r?\n/)
+                lines.shift()
+                return lines.join('\n')
+              },
+              complete: (results) => resolve(results.data),
+              error: (err) => reject(err),
+            })
+          })
+
+        data = await parseCSV_UTF16(file)
+      }
 
       console.log('Parsed CSV:', data)
 
-      // Map CSV to Supabase fields
+      // Map CSV to Supabase
       const rows = data.map((row: any) => ({
         listing_id: row['Order number'] || '',
         item_name: row['Item title'] || '',
