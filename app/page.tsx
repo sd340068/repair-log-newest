@@ -39,6 +39,8 @@ export default function Home() {
     date_sold: '',
   })
 
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error', visible: boolean }>({ message: '', type: 'success', visible: false })
+
   // --- Mount + Auth ---
   useEffect(() => setMounted(true), [])
   useEffect(() => {
@@ -106,6 +108,12 @@ export default function Home() {
   const allTotalCount = filtered.reduce((sum,r)=>sum + (r.quantity??0),0)
   const allTotalAmount = filtered.reduce((sum,r)=>sum + (r.price??0),0)
 
+  // --- Toast helper ---
+  const showToast = (message:string, type:'success'|'error')=>{
+    setToast({ message, type, visible:true })
+    setTimeout(()=>setToast(prev=>({...prev, visible:false})), 4000)
+  }
+
   // --- CSV Upload ---
   const handleCSV = async (e: React.ChangeEvent<HTMLInputElement>)=>{
     const file = e.target.files?.[0]
@@ -120,7 +128,7 @@ export default function Home() {
       catch { text = new TextDecoder('utf-8').decode(buffer) }
 
       const lines = text.split(/\r?\n/).filter(l=>l.trim())
-      if(lines.length<2){ alert('CSV too short'); setLoading(false); return }
+      if(lines.length<2){ showToast('CSV too short','error'); setLoading(false); return }
 
       const delimiter = lines[0].includes('\t')?'\t':','
       const headers = lines[0].split(delimiter).map(h=>h.trim())
@@ -150,16 +158,22 @@ export default function Home() {
         if(r.listing_id) uniqueMap.set(r.listing_id,r)
       }
       const uniqueRows = Array.from(uniqueMap.values())
-      if(uniqueRows.length===0){ alert('No valid rows'); setLoading(false); return }
+      if(uniqueRows.length===0){ showToast('No valid rows', 'error'); setLoading(false); return }
+
+      const insertedCount = uniqueRows.length
+      const duplicateCount = mapped.length - insertedCount
 
       const {error} = await supabase.from('repairs').upsert(uniqueRows,{
         onConflict:'listing_id',
         ignoreDuplicates:true
       })
-      if(error) alert('Supabase insert failed: '+error.message)
-      else await fetchRepairs()
+      if(error) showToast('CSV insert failed: '+error.message, 'error')
+      else {
+        await fetchRepairs()
+        showToast(`CSV imported: ${insertedCount} new, ${duplicateCount} duplicates skipped`, 'success')
+      }
 
-    } catch(err){ console.error(err); alert('CSV failed') }
+    } catch(err){ console.error(err); showToast('CSV failed', 'error') }
     finally{ setLoading(false) }
   }
 
@@ -176,10 +190,11 @@ export default function Home() {
         date_sold:new Date(manual.date_sold).toISOString(),
         source:'manual'
       }])
-      if(error) alert('Failed to add repair')
+      if(error) showToast('Failed to add repair','error')
       else {
         setManual({ listing_id:'', item_name:'', price:'', quantity:'', date_sold:'' })
         await fetchRepairs()
+        showToast('Manual repair added','success')
       }
     } finally{ setLoading(false) }
   }
@@ -197,6 +212,7 @@ export default function Home() {
     setEditValues({})
     await fetchRepairs()
     setLoading(false)
+    showToast('Repair updated','success')
   }
   const handleDelete = async (id:number)=>{
     if(!confirm('Delete this repair?')) return
@@ -204,6 +220,7 @@ export default function Home() {
     await supabase.from('repairs').delete().eq('id',id)
     await fetchRepairs()
     setLoading(false)
+    showToast('Repair deleted','success')
   }
 
   const handleLogout = async ()=>{
@@ -250,22 +267,21 @@ export default function Home() {
         <button type="submit" className="px-4 py-2 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-800 transition">Add</button>
       </form>
 
-      {/* Filter & Totals */}
+      {/* Filters */}
       <div className="p-6 bg-white border border-gray-200 rounded-xl shadow flex flex-col items-center gap-6">
         <div className="flex flex-col md:flex-row items-center gap-2 w-full justify-center">
           <label className="font-bold text-xl text-gray-900">Filter:</label>
-<select
-  value={filterPeriod}
-  onChange={e => setFilterPeriod(e.target.value as any)} // ✅ fixed
-  className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900 text-gray-900"
->
-  <option value="thisMonth">This Month</option>
-  <option value="lastMonth">Last Month</option>
-  <option value="thisYear">This Year</option>
-  <option value="lastYear">Last Year</option>
-  <option value="custom">Custom Date</option>
-</select>
-
+          <select
+            value={filterPeriod}
+            onChange={e=>setFilterPeriod(e.target.value as any)}
+            className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900 text-gray-900"
+          >
+            <option value="thisMonth">This Month</option>
+            <option value="lastMonth">Last Month</option>
+            <option value="thisYear">This Year</option>
+            <option value="lastYear">Last Year</option>
+            <option value="custom">Custom Date</option>
+          </select>
         </div>
 
         {filterPeriod==='custom' && (
@@ -278,12 +294,14 @@ export default function Home() {
           </div>
         )}
 
+        {/* All Items Total */}
         <div className="bg-blue-100 w-full md:w-96 p-6 rounded-lg shadow flex flex-col items-center justify-center mt-4">
           <span className="font-bold text-4xl text-blue-900">{allTotalCount}</span>
           <span className="font-semibold text-gray-700 text-xl mt-1">All Items</span>
           <span className="text-gray-500 text-base mt-1">£{allTotalAmount.toFixed(2)}</span>
         </div>
 
+        {/* Key Items Tiles */}
         <div className="flex flex-wrap gap-4 justify-center w-full">
           {totals.map(t=>(
             <div key={t.item} className="bg-gray-50 p-4 rounded-lg shadow flex flex-col items-center justify-center min-w-[120px]">
@@ -326,6 +344,14 @@ export default function Home() {
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Toast */}
+      <div className={`fixed bottom-6 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded shadow text-white transition-all duration-500 
+        ${toast.visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}
+        ${toast.type==='success'?'bg-green-500':'bg-red-500'}
+      `}>
+        {toast.message}
       </div>
 
     </main>
