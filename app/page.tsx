@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase } from '../lib/supabase'
 import { useRouter } from 'next/navigation'
 
 type Repair = {
@@ -25,7 +25,7 @@ export default function Home() {
         const { data, error } = await supabase.auth.getSession()
         const session = data?.session ?? null
         if (!session) {
-          router.push('/login')
+          router.push('/login') // redirect if not logged in
         } else {
           setCheckingAuth(false)
         }
