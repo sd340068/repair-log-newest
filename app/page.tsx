@@ -303,7 +303,7 @@ export default function Home() {
         {/* All Items Total */}
         <div className="bg-blue-100 w-full md:w-96 p-6 rounded-lg shadow flex flex-col items-center justify-center mt-4">
           <span className="font-bold text-4xl text-blue-900">{allTotalCount}</span>
-          <span className="font-semibold text-gray-700 text-xl mt-1">All Items</span>
+          <span className="font-semibold text-gray-700 text-xl mt-1">Total Repairs</span>
           <span className="text-gray-500 text-base mt-1">£{allTotalAmount.toFixed(2)}</span>
         </div>
 
