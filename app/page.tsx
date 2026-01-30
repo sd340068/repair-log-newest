@@ -160,8 +160,13 @@ export default function Home() {
       const unique = new Map<string, Repair>()
       mapped.forEach(r => unique.set(r.listing_id, r))
 
-      await supabase.from('repairs')
-        .upsert([...unique.values()], { onConflict: 'listing_id' })
+const { error } = await supabase
+  .from('repairs')
+  .upsert(uniqueRows, {
+    onConflict: 'listing_id',
+    ignoreDuplicates: true
+  })
+
 
       await fetchRepairs()
     } finally {
