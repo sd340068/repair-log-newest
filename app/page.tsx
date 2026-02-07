@@ -100,7 +100,7 @@ export default function Home() {
     }
   })
 
-  const keyItems = ['Nintendo','Playstation','Xbox','iPad','Laptop']
+  const keyItems = ['Nintendo','Playstation','Xbox','iPad','Laptop','Phone']
   const totals = keyItems.map(item=>{
     const rows = filtered.filter(r=>r.item_name?.toLowerCase().includes(item.toLowerCase()))
     return {
