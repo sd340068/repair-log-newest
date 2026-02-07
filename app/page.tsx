@@ -321,6 +321,7 @@ export default function Home() {
               case 'nintendo': borderColor='border-red-500'; break
               case 'ipad': borderColor='border-black'; break
               case 'laptop': borderColor='border-yellow-400'; break
+              case 'phone': borderColor='border-pink-400'; break
             }
 
             return (
